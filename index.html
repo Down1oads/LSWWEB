@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LEGO Star Wars Web</title>
+<style>
+html,body{margin:0;height:100%;background:#000;color:#ccc;font:16px system-ui}main{box-sizing:border-box;min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}h1{font-size:28px;letter-spacing:4px;font-weight:400}p{max-width:540px;line-height:1.6}input{max-width:100%;padding:16px}iframe{position:fixed;inset:0;width:100%;height:100%;border:0;outline:0}button{background:none;border:0;color:#888;text-decoration:underline;cursor:pointer;font:inherit}#message{color:#a1c49b}progress{width:320px;max-width:100%}[hidden]{display:none!important}
+</style>
+<main id="setup">
+<h1>LEGO STAR WARS</h1>
+<p>Select your LEGO Star Wars: The Video Game PS2 USA v2.00 ISO. You only need to do this once: the disc is kept in this browser's private storage and the game starts by itself on later visits. Nothing is uploaded.</p>
+<div><input id="disc" type="file" accept=".iso" aria-label="Select LEGO Star Wars ISO" disabled></div>
+<progress id="progress" max="1" value="0" hidden></progress>
+<p id="message" role="status">Preparing the player…</p>
+<p>WASD to move · Space to jump · J or left mouse to attack<br>E for Force · Q to switch character · Enter to pause</p>
+<p><button id="forget" type="button" hidden>Forget the stored disc</button></p>
+<p>Ported By Down1oads</p>
+</main>
+<script>
+(async()=>{
+  const DISC_BYTES=1869316096,DISC_NAME='lego-star-wars-usa-v2.00.iso';
+  const message=document.getElementById('message'),input=document.getElementById('disc'),progress=document.getElementById('progress'),forget=document.getElementById('forget');
+  const launch=file=>{
+    window.sh2DiscFile=file;
+    const frame=document.createElement('iframe');frame.title='LEGO Star Wars';frame.allow='autoplay; fullscreen; gamepad';frame.allowFullscreen=true;frame.src='./player.html';
+    document.getElementById('setup').hidden=true;document.body.appendChild(frame);frame.focus();
+  };
+  const storage=async()=>{try{return await navigator.storage.getDirectory();}catch(e){return null;}};
+  const stored=async()=>{
+    const dir=await storage();if(!dir)return null;
+    try{const file=await (await dir.getFileHandle(DISC_NAME)).getFile();return file.size===DISC_BYTES?file:null;}catch(e){return null;}
+  };
+  const keep=async file=>{
+    const dir=await storage();if(!dir)return null;
+    try{await navigator.storage.persist();}catch(e){}
+    let handle=null;
+    try{
+      handle=await dir.getFileHandle(DISC_NAME+'.part',{create:true});
+      const out=await handle.createWritable();
+      progress.hidden=false;
+      const chunk=32<<20;
+      for(let at=0;at<file.size;at+=chunk){
+        await out.write(await file.slice(at,Math.min(file.size,at+chunk)).arrayBuffer());
+        progress.value=(at+chunk)/file.size;
+        message.textContent='Storing the disc for next time… '+Math.min(100,Math.round(100*(at+chunk)/file.size))+'%';
+      }
+      await out.close();
+      await handle.move(DISC_NAME);
+      return await stored();
+    }catch(e){
+      try{await dir.removeEntry(DISC_NAME+'.part');}catch(_){}
+      console.warn('Could not keep the disc in browser storage:',e);
+      return null;
+    }finally{progress.hidden=true;}
+  };
+  try{
+    if(!crossOriginIsolated){
+      if(!('serviceWorker' in navigator))throw new Error('A browser with service workers is required.');
+      await navigator.serviceWorker.register('./isolation-sw.js');
+      await navigator.serviceWorker.ready;
+      if(sessionStorage.getItem('lsw-isolation-reload'))throw new Error('Browser isolation could not start. Close this tab and reopen the site in current Chrome, Edge, or Brave.');
+      sessionStorage.setItem('lsw-isolation-reload','1');
+      if(navigator.serviceWorker.controller)location.reload();
+      else navigator.serviceWorker.addEventListener('controllerchange',()=>location.reload(),{once:true});
+      return;
+    }
+    sessionStorage.removeItem('lsw-isolation-reload');
+    if(!navigator.gpu)throw new Error('WebGPU is required. Use a current desktop Chrome, Edge, or Brave browser with hardware acceleration.');
+    const saved=await stored();
+    if(saved&&!new URLSearchParams(location.search).has('change-disc')){launch(saved);return;}
+    forget.hidden=!saved;
+    forget.addEventListener('click',async()=>{const dir=await storage();try{await dir.removeEntry(DISC_NAME);}catch(e){}forget.hidden=true;message.textContent='Stored disc removed. Select the ISO to play.';});
+    input.disabled=false;message.textContent='Ready. Select the ISO to play.';
+    input.addEventListener('change',async()=>{
+      const file=input.files[0];if(!file)return;
+      if(file.size!==DISC_BYTES){message.textContent='This build needs the USA v2.00 disc image (1,869,316,096 bytes).';return;}
+      input.disabled=true;
+      const kept=await keep(file);
+      if(!kept)message.textContent='Could not store the disc in this browser (not enough space?). Starting from the selected file; you will need to select it again next time.';
+      launch(kept||file);
+    });
+  }catch(error){message.textContent=error.message;}
+})();
+</script>
+</html>
