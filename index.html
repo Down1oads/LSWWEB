@@ -14,10 +14,12 @@ html,body{margin:0;height:100%;background:#000;color:#ccc;font:16px system-ui}ma
 <progress id="progress" max="1" value="0" hidden></progress>
 <p id="message" role="status">Preparing the player…</p>
 <p>WASD to move · Space to jump · J or left mouse to attack<br>E for Force · Q to switch character · Enter to pause</p>
+<p><label><input type="checkbox" onchange="localStorage.setItem('lsw-fps',this.checked?'30':'60')" ref="fps30"> 30 FPS mode (Chromebooks / slower PCs)</label></p>
 <p><button id="forget" type="button" hidden>Forget the stored disc</button></p>
 <p>Ported By Down1oads</p>
 </main>
 <script>
+document.querySelector('[ref=fps30]').checked=localStorage.getItem('lsw-fps')==='30';
 (async()=>{
   const DISC_BYTES=1869316096,DISC_NAME='lego-star-wars-usa-v2.00.iso';
   const message=document.getElementById('message'),input=document.getElementById('disc'),progress=document.getElementById('progress'),forget=document.getElementById('forget');
